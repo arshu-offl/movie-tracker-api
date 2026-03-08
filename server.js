@@ -2,19 +2,57 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs/promises");
 const path = require("path");
+const edgeConfigGet = require("@vercel/edge-config").get;
+const envConfig = require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const DATA_FILE = path.join(__dirname, "data", "movies.json");
 
+console.log(process.env.EDGE_CONFIG);
 app.use(cors());
 app.use(express.json());
+
+async function updateEdgeConfig(key, value){
+
+  const edgeConfigId = process.env.EDGE_CONFIG_ID;
+  const accessToken = process.env.VERCEL_ACCESS_TOKEN;
+
+  const apiURL = `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`;
+
+  try{
+
+      console.log(key);
+      console.log(value);
+      const response = await fetch(apiURL, {
+          method: "PATCH",
+          headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+              items: [
+                  {
+                      operation: "upsert",
+                      key: key,
+                      value: value
+                  }
+              ]
+          })
+      });
+
+      const json = await response.json();
+      console.log(json);
+  } catch (error) {
+      console.log(error);
+  }
+}
 
 // Helper to read data
 async function readData() {
   try {
-    const data = await fs.readFile(DATA_FILE, "utf8");
-    return JSON.parse(data);
+    const moviesList = await edgeConfigGet("moviesList");
+    return moviesList;
   } catch (error) {
     console.error("Error reading data file:", error);
     return [];
@@ -24,7 +62,7 @@ async function readData() {
 // Helper to write data
 async function writeData(data) {
   try {
-    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+    await updateEdgeConfig("moviesList", data);
   } catch (error) {
     console.error("Error writing data file:", error);
     throw error;
